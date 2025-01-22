@@ -1,0 +1,143 @@
+- name: Perform the Migration
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Check VM folders for VMs
+      vmware.vmware_rest.vcenter_vm_info:
+        folders: "{{ item.folder }}"
+      register: vm_folders_with_vms
+      loop: "{{ vm_folders }}"
+      when: vm_folders | length > 0
+
+    - name: Display VM names and IDs
+      ansible.builtin.debug:
+        msg: "VM Name: {{ item.name }}, VM ID: {{ item.vm }}"
+      loop: "{{ vm_folders_with_vms.results | map(attribute='value') | flatten }}"
+      when: item | length > 0
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Collect VM names and IDs
+      ansible.builtin.set_fact:
+        vm_name_id_pairs: "{{ vm_name_id_pairs | default([]) + [{'name': item.name, 'vm': item.vm}] }}"
+      loop: "{{ vm_folders_with_vms.results | map(attribute='value') | flatten }}"
+      when: item | length > 0
+
+    - name: Prepare VMs for Plan spec
+      ansible.builtin.set_fact:
+        vms_for_plan_spec: "{{ vms_for_plan_spec | default([]) + [{'hooks': [], 'id': vm_id.vm}] }}"
+      loop: "{{ vm_name_id_pairs }}"
+      loop_control:
+        loop_var: vm_id
+      when: vm_id.name in user_selected_vm_names.split('\n')
+
+    - name: Get information for the distributed port group 'segment-migrating-to-ocpvirt'
+      vmware.vmware_rest.vcenter_network_info:
+        filter_types: DISTRIBUTED_PORTGROUP
+      register: my_portgroup
+
+    - name: Capture the distributed portgroup id to make network mappings
+      ansible.builtin.set_fact:
+        portgroup_id: "{{ my_portgroup.value[0].network }}"
+
+    - name: Build a list of all the datastores
+      vmware.vmware_rest.vcenter_datastore_info:
+      register: all_the_datastores
+
+    - name: Capture the datastore id
+      set_fact:
+        datastore_id: "{{ all_the_datastores.value[0].datastore }}"
+
+    - name: Set migration type (warm or cold)
+      ansible.builtin.set_fact:
+        warm_migration: "{{ warm_migration_choice == 'warm' }}"
+
+    - name: Create or update a NetworkMap
+      redhat.openshift.k8s:
+        state: present
+        definition:
+          apiVersion: forklift.konveyor.io/v1beta1
+          kind: NetworkMap
+          metadata:
+            name: "{{ networkmap_name }}"
+            namespace: openshift-mtv
+          spec:
+            map:
+              - destination:
+                  type: pod
+                source:
+                  id: "{{ portgroup_id }}"
+            provider:
+              destination:
+                name: host
+                namespace: openshift-mtv
+              source:
+                name: vmware
+                namespace: openshift-mtv
+
+    - name: Create or update a StorageMap
+      redhat.openshift.k8s:
+        state: present
+        definition:
+          apiVersion: forklift.konveyor.io/v1beta1
+          kind: StorageMap
+          metadata:
+            name: "{{ storagemap_name }}"
+            namespace: openshift-mtv
+          spec:
+            map:
+              - destination:
+                  storageClass: ocs-storagecluster-ceph-rbd
+                source:
+                  id: "{{ datastore_id }}"
+            provider:
+              destination:
+                name: host
+                namespace: openshift-mtv
+              source:
+                name: vmware
+                namespace: openshift-mtv
+
+    - name: Deploy Virt Plan
+      redhat.openshift.k8s:
+        state: present
+        definition:
+          apiVersion: forklift.konveyor.io/v1beta1
+          kind: Plan
+          metadata:
+            name: "{{ plan_name }}"
+            namespace: openshift-mtv
+          spec:
+            archived: false
+            description: ''
+            map:
+              network:
+                name: "{{ networkmap_name }}"
+                namespace: openshift-mtv
+              storage:
+                name: "{{ storagemap_name }}"
+                namespace: openshift-mtv
+            provider:
+              destination:
+                name: host
+                namespace: openshift-mtv
+              source:
+                name: vmware
+                namespace: openshift-mtv
+            targetNamespace: openshift-mtv
+            vms: "{{ vms_for_plan_spec }}"
+            warm: "{{ warm_migration }}"
+
+    - name: Create a Migration manifest to run the Plan CR
+      redhat.openshift.k8s:
+        state: present
+        definition:
+          apiVersion: forklift.konveyor.io/v1beta1
+          kind: Migration
+          metadata:
+            name: "{{ plan_name }}"
+            namespace: openshift-mtv
+          spec:
+            plan:
+              name: "{{ plan_name }}"
+              namespace: openshift-mtv

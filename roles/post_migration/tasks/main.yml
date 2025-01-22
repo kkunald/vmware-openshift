@@ -1,0 +1,3 @@
+- name: Clean up or verify migration status
+  ansible.builtin.debug:
+    msg: "Post-migration tasks are done."

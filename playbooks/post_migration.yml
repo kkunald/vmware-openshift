@@ -1,0 +1,27 @@
+- name: Perform Post-Migration Tasks
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Verify migration status
+      redhat.openshift.k8s:
+        state: get
+        definition:
+          apiVersion: forklift.konveyor.io/v1beta1
+          kind: Plan
+          metadata:
+            name: "{{ plan_name }}"
+            namespace: openshift-mtv
+      register: plan_status
+
+    - name: Debug plan status
+      debug:
+        var: plan_status
+
+    - name: Fail if migration is not completed
+      fail:
+        msg: "Migration is not completed"
+      when: plan_status.status.phase != "Completed"
+
+    - name: Clean up or finalize post-migration tasks
+      ansible.builtin.debug:
+        msg: "Post-migration tasks complete"

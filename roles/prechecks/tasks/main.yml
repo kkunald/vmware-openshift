@@ -1,0 +1,12 @@
+- name: Build a list of all the folders
+  vmware.vmware_rest.vcenter_folder_info:
+  register: all_folders
+
+- name: Filter VM folders
+  ansible.builtin.set_fact:
+    vm_folders: "{{ all_folders.value | selectattr('type', 'equalto', 'VIRTUAL_MACHINE') | list }}"
+
+- name: Ensure VM folders detected
+  ansible.builtin.fail:
+    msg: "No VM folders found."
+  when: vm_folders | length == 0

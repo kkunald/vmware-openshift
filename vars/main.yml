@@ -1,0 +1,7 @@
+---
+# Variables for VMware to OpenShift Migration via MTV
+user_selected_vm_names: ""  # VM names separated by new lines
+networkmap_name: "your-network-map-name"  # Name of the NetworkMap resource
+storagemap_name: "your-storage-map-name"  # Name of the StorageMap resource
+plan_name: "your-plan-name"  # Name of the Plan resource
+warm_migration_choice: "cold"  # Choice between warm or cold migration

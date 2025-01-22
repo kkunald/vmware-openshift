@@ -1,0 +1,28 @@
+- name: Perform Prechecks for Migration
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Build a list of all the folders
+      vmware.vmware_rest.vcenter_folder_info:
+      register: all_folders
+
+    - name: Filter VM folders
+      ansible.builtin.set_fact:
+        vm_folders: "{{ all_folders.value | selectattr('type', 'equalto', 'VIRTUAL_MACHINE') | list }}"
+
+    - name: Ensure VM folders detected
+      ansible.builtin.fail:
+        msg: "No VM folders found."
+      when: vm_folders | length == 0
+
+    - name: Check for necessary ports (example port check)
+      uri:
+        url: "https://{{ inventory_hostname }}:443"
+        status_code: 200
+        validate_certs: no
+      register: result
+
+    - name: Fail if port check unsuccessful
+      ansible.builtin.fail:
+        msg: "Required port 443 is not open or accessible."
+      when: result.status_code is not defined or result.status_code != 200

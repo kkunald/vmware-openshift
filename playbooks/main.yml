@@ -1,0 +1,17 @@
+- name: Prechecks before migration
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - prechecks
+
+- name: Perform actual migration
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - migration
+
+- name: Cutover post migration tasks
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - post_migration

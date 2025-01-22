@@ -1,0 +1,25 @@
+---
+- name: Set Proxy Environment Variables
+  hosts: localhost
+  become: yes
+  tasks:
+    - name: Set HTTP proxy
+      lineinfile:
+        path: /etc/environment
+        line: 'http_proxy="http://usddcsbrcache00.us.kworld.kpmg.com:80"'
+        create: yes
+
+    - name: Set HTTPS proxy
+      lineinfile:
+        path: /etc/environment
+        line: 'https_proxy="http://usddcsbrcache00.us.kworld.kpmg.com:80"'
+        create: yes
+
+    - name: Set NO proxy
+      lineinfile:
+        path: /etc/environment
+        line: 'no_proxy="localhost,127.0.0.1/8,10.0.0.0/10,kworld.kpmg.com"'
+        create: yes
+
+    - name: Apply environment variables
+      shell: source /etc/environment
